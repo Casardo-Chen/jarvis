@@ -84,3 +84,40 @@ export function base64ToArrayBuffer(base64: string) {
   }
   return bytes.buffer;
 }
+
+export function isCompleteJson(jsonOutput: string | null): boolean {
+  if (!jsonOutput || typeof jsonOutput !== 'string') {
+      return false;  // Invalid input
+  }
+
+  const lines = jsonOutput.split('\n');
+  let extractedJson = '';
+
+  // Detect JSON block
+  for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '```json') {  // Find start of JSON block
+          extractedJson = lines.slice(i + 1).join('\n');
+          const endIndex = extractedJson.indexOf('```');
+          if (endIndex !== -1) {
+              extractedJson = extractedJson.substring(0, endIndex).trim();  // Remove trailing backticks
+          }
+          break;
+      }
+  }
+
+  if (!extractedJson) {
+      return false;  // No JSON block found
+  }
+
+  try {
+      // Fix unintended newlines inside JSON string values
+      extractedJson = extractedJson.replace(/(\S)\n(\s*)"(\\w)/g, '$1 $2"$3');
+
+      // Attempt to parse JSON
+      JSON.parse(extractedJson);
+      return true;  // JSON is complete and valid
+  } catch (e) {
+      return false;  // JSON is incomplete or invalid
+  }
+}
+
