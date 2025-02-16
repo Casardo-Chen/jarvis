@@ -43,6 +43,17 @@ export default function SidePanel() {
   } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (connected && client) {
+        client.send([{ text: "This is a periodic message." }]);
+      }
+    }, 5000); // Sends every 5 seconds, adjust the interval as needed
+  
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, [connected, client]);
+  
+
   //scroll the log to the bottom when new logs come in
   useEffect(() => {
     if (loggerRef.current) {
@@ -65,7 +76,7 @@ export default function SidePanel() {
 
   const handleSubmit = () => {
     client.send([{ text: textInput }]);
-
+    
     setTextInput("");
     if (inputRef.current) {
       inputRef.current.innerText = "";

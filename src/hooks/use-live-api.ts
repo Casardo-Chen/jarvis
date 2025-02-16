@@ -23,6 +23,8 @@ import { LiveConfig } from "../multimodal-live-types";
 import { AudioStreamer } from "../lib/audio-streamer";
 import { audioContext } from "../lib/utils";
 import VolMeterWorket from "../lib/worklets/vol-meter";
+import { RUNTIME_SYSTEM_INSTRUCTION } from "../lib/prompts";
+
 
 export type UseLiveAPIResults = {
   client: MultimodalLiveClient;
@@ -47,6 +49,11 @@ export function useLiveAPI({
   const [connected, setConnected] = useState(false);
   const [config, setConfig] = useState<LiveConfig>({
     model: "models/gemini-2.0-flash-exp",
+    systemInstruction: {
+      parts: [
+        { text: RUNTIME_SYSTEM_INSTRUCTION } 
+      ]
+    },
   });
   const [volume, setVolume] = useState(0);
 
