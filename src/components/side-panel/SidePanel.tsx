@@ -22,6 +22,8 @@ import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { useLoggerStore } from "../../lib/store-logger";
 import Logger, { LoggerFilterType } from "../logger/Logger";
 import "./side-panel.scss";
+import { useVisualQuestionStore } from "../../hooks/use-visual-questions";
+import { useAudioStreamStore } from "../../hooks/use-audio-stream";
 
 const filterOptions = [
   { value: "conversations", label: "Conversations" },
@@ -30,7 +32,7 @@ const filterOptions = [
 ];
 
 export default function SidePanel() {
-  const { connected, client } = useLiveAPIContext();
+  const { connected, client, volume } = useLiveAPIContext();
   const [open, setOpen] = useState(true);
   const loggerRef = useRef<HTMLDivElement>(null);
   const loggerLastHeightRef = useRef<number>(-1);
@@ -43,15 +45,30 @@ export default function SidePanel() {
   } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (connected && client) {
-        client.send([{ text: "This is a periodic message." }]);
-      }
-    }, 5000); // Sends every 5 seconds, adjust the interval as needed
   
-    return () => clearInterval(intervalId); // Cleanup on unmount
-  }, [connected, client]);
+
+//   useEffect(() => {
+//     const intervalId = setInterval(() => {
+//       if (connected && client && volume < 0.1) {
+//         console.log("sending proactive check")
+//         client.send([{ text: `
+// Given the following set of questions, generate a single concise response (10-15 words total) that includes direction and distance if the answer is "yes." If the answer is "no," leave the response blank without any text.
+
+// Example Input Questions:
+// Is there an elevator nearby? If yes, estimate the distance and direction of the elevator.
+// Is there an intersection nearby? If yes, describe its layout, including what is on the left, straight ahead, and on the right. Mention any landmarks, signs, or distinct features at each direction.
+// Is there a sign or signage nearby? If yes, read the text and describe its location (e.g., on the left wall, above eye level).
+// If in a hallway, what is at the end of the hallway? If yes, give a depth estimation of the end from here.
+// Is there a staircase nearby? If yes, estimate the distance and direction of the staircase.
+// Example Output (if applicable):
+// “Intersection ahead: Left-café (5ft), Straight-bookstore (10ft), Right-park (15ft); Sign-left wall (3ft).”
+
+// If none are detected, output: (blank). ` }]);
+//       }
+//     }, 10000); // Sends every 10 seconds, adjust the interval as needed
+  
+//     return () => clearInterval(intervalId); // Cleanup on unmount
+//   }, [connected, client]);
   
 
   //scroll the log to the bottom when new logs come in

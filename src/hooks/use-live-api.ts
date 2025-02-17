@@ -83,16 +83,22 @@ export function useLiveAPI({
     const onAudio = (data: ArrayBuffer) =>
       audioStreamerRef.current?.addPCM16(new Uint8Array(data));
 
+    const onText = (textData: any) => {
+      console.log("Received text stream:", textData);
+    }
+
     client
       .on("close", onClose)
       .on("interrupted", stopAudioStreamer)
-      .on("audio", onAudio);
+      .on("audio", onAudio)
+      .on("text", onText);
 
     return () => {
       client
         .off("close", onClose)
         .off("interrupted", stopAudioStreamer)
-        .off("audio", onAudio);
+        .off("audio", onAudio)
+        .off("text", onText);
     };
   }, [client]);
 

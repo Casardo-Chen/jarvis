@@ -18,6 +18,7 @@ import {
   createWorketFromSrc,
   registeredWorklets,
 } from "./audioworklet-registry";
+import { useAudioStreamStore } from "../hooks/use-audio-stream";
 
 export class AudioStreamer {
   public audioQueue: Float32Array[] = [];
@@ -105,6 +106,7 @@ export class AudioStreamer {
 
     if (!this.isPlaying) {
       this.isPlaying = true;
+      useAudioStreamStore.getState().setIsPlaying(true);
       // Initialize scheduledTime only when we start playing
       this.scheduledTime = this.context.currentTime + this.initialBufferTime;
       this.scheduleNextBuffer();
@@ -142,6 +144,7 @@ export class AudioStreamer {
             !this.audioQueue.length &&
             this.endOfQueueAudioSource === source
           ) {
+            useAudioStreamStore.getState().setIsPlaying(false); //new code
             this.endOfQueueAudioSource = null;
             this.onComplete();
           }
@@ -182,6 +185,9 @@ export class AudioStreamer {
     if (this.audioQueue.length === 0 && this.processingBuffer.length === 0) {
       if (this.isStreamComplete) {
         this.isPlaying = false;
+        // new code
+        useAudioStreamStore.getState().setIsPlaying(false);
+        //end
         if (this.checkInterval) {
           clearInterval(this.checkInterval);
           this.checkInterval = null;
@@ -211,6 +217,7 @@ export class AudioStreamer {
   stop() {
     this.isPlaying = false;
     this.isStreamComplete = true;
+    useAudioStreamStore.getState().setIsPlaying(false);
     this.audioQueue = [];
     this.processingBuffer = new Float32Array(0);
     this.scheduledTime = this.context.currentTime;
@@ -250,6 +257,7 @@ export class AudioStreamer {
         this.scheduleNextBuffer();
       }
     } else {
+      useAudioStreamStore.getState().setIsPlaying(false);
       this.onComplete();
     }
   }
