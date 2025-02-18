@@ -19,8 +19,12 @@ import "./App.scss";
 import { LiveAPIProvider } from "./contexts/LiveAPIContext";
 import SidePanel from "./components/side-panel/SidePanel";
 import { Planning } from "./components/planning/Planning";
+import { VisualCheck } from "./components/visual-check/VisualCheck";
 import ControlTray from "./components/control-tray/ControlTray";
 import cn from "classnames";
+
+import { useSystemStateStore, SystemState } from "./store/use-system-state";
+import { set } from "lodash";
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
 if (typeof API_KEY !== "string") {
@@ -36,6 +40,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   // either the screen capture, the video or null, if null we hide it
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const { systemState, updateStateOnUserInput, setSystemState } = useSystemStateStore();
 
   return (
     <div className="App">
@@ -45,7 +50,8 @@ function App() {
           <main>
             <div className="main-app-area">
               {/* APP goes here */}
-              <Planning />
+              {/* <Planning /> */}
+              <VisualCheck />
               <video
                 className={cn("stream", {
                   hidden: !videoRef.current || !videoStream,
@@ -62,6 +68,14 @@ function App() {
               onVideoStreamChange={setVideoStream}
             >
               {/* put your own buttons here */}
+              <button
+                className={cn("action-button")}
+                onClick={() => {
+                  setSystemState(systemState === "planning" ? "execution" : "planning");
+                }}
+                        >
+                          change mode
+                        </button>
             </ControlTray>
           </main>
         </div>

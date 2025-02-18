@@ -54,6 +54,7 @@ interface MultimodalLiveClientEventTypes {
   turncomplete: () => void;
   toolcall: (toolCall: ToolCall) => void;
   toolcallcancellation: (toolcallCancellation: ToolCallCancellation) => void;
+  speaking: (isSpeaking: boolean) => void;
 }
 
 export type MultimodalLiveAPIClientConnection = {
@@ -69,6 +70,7 @@ export type MultimodalLiveAPIClientConnection = {
 export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEventTypes> {
   public ws: WebSocket | null = null;
   protected config: LiveConfig | null = null;
+  public isSpeaking: boolean = false;
   public url: string = "";
   public getConfig() {
     return { ...this.config };
@@ -100,7 +102,17 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
 
     ws.addEventListener("message", async (evt: MessageEvent) => {
       if (evt.data instanceof Blob) {
-        this.receive(evt.data);
+        if (evt.data.size == 54) {
+        this.isSpeaking = false;
+        this.emit("speaking", false); 
+        console.log("System is silent...");
+      } else {
+        this.isSpeaking = true;
+        this.emit("speaking", true);
+        console.log("System is speaking...");
+      }
+      this.receive(evt.data);
+
       } else {
         console.log("non blob message", evt);
       }

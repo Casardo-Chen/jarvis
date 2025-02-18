@@ -15,15 +15,15 @@
  */
 import { type Tool, SchemaType } from "@google/generative-ai";
 import { useEffect, useRef, useState, useCallback, memo } from "react";
-import vegaEmbed from "vega-embed";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import {
   ToolCall,
   ToolResponse,
   LiveFunctionResponse,
 } from "../../multimodal-live-types";
-import { RUNTIME_SYSTEM_INSTRUCTION } from "../../lib/prompts";
+import { RUNTIME_SYSTEM_INSTRUCTION , PLANNING_SYSTEM_INSTRUCTION, VQ_DESCRIPTION} from "../../lib/prompts";
 import './Planning.scss';
+import { visualQuestionGeneration } from "../../lib/visual-question-generator";
 /**
  * Copyright 2024 Google LLC
  *
@@ -41,8 +41,16 @@ import './Planning.scss';
  */
 import { List, ListProps } from "./List";
 import { Chips } from "./Chips";
+import { useSystemStateStore } from "../../store/use-system-state";
+import { sleep } from "openai/core";
+
 
 // Types
+interface StringArgs {
+  context: string;
+  type: string;
+}
+
 interface CreateQuestionArgs {
   id: string;
   heading: string;
@@ -104,66 +112,70 @@ const toolObject: Tool[] = [
       //   },
       // },
       {
-        name: "create_list",
+        name: "visual_question_generation",
         description:
-          "Creates new list. Requires `id`, `heading`, and `list_array`. May be called multiple times, once for each list you want to create.",
+          "Generates a visual question based on the list. Requires `context`",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            id: {
+            context: {
               type: SchemaType.STRING,
-            },
-            heading: {
-              type: SchemaType.STRING,
-            },
-            list_array: {
-              type: SchemaType.ARRAY,
-              items: {
-                type: SchemaType.STRING,
-              },
-            },
+            }
           },
-          required: ["id", "heading", "list_array"],
+          required: ["context"],
         },
       },
+      {
+        name: "add_to_context",
+        description:
+          "Adds the provided information to the context. Requires `context`",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            context: {
+              type: SchemaType.STRING,
+            }
+          },
+          required: ["context"],
+        },
+      }
+      // {
+      //   name: "create_list",
+      //   description:
+      //     "Creates new list. Requires `id`, `heading`, and `list_array`. May be called multiple times, once for each list you want to create.",
+      //   parameters: {
+      //     type: SchemaType.OBJECT,
+      //     properties: {
+      //       id: {
+      //         type: SchemaType.STRING,
+      //       },
+      //       heading: {
+      //         type: SchemaType.STRING,
+      //       },
+      //       list_array: {
+      //         type: SchemaType.ARRAY,
+      //         items: {
+      //           type: SchemaType.STRING,
+      //         },
+      //       },
+      //     },
+      //     required: ["id", "heading", "list_array"],
+      //   },
+      // },
     ],
   },
 ];
 
-const systemInstructionObject = {
-  parts: [
-    {
-      text: `In this conversation you will help the user with making a checklist or multiple checklists. Use the tools provided to fulfil requests to help create and modify lists. Always call any relevant tools *before* speaking. 
-
-# Checklist guidance:
-- 
-- Give each list an id for identification (eg. "favorite-movies")
-- Give list items as an array of markdown-formatted strings
-- Use extended markdown for checkboxes: "- [ ] unchecked item" and "- [x] checked item"
-- Help me by checking off items when requested
-- Add headings eg. "## Heading" when requested to sort/organise/structure lists
-- Bias towards creating new lists for new topics
-- If I don't specify what to put on the list, let me know you've added some examples
-- Use existing examples, if any, as a reference for your new list
-- Do not return the list in your conversational response, only via tools
-- There is no need to ask if there is anything else you can help with
-- Combine lists by removing relevant existing lists and creating a new one when requested
-- Note that the user can also check off and reorder items using the UI
-
-The user will now start the conversation, probably by asking you to "start a list about: {my request}". Create the checklist for the user, then you two can co-create checklists together. Speak as helpfully and concisely as possible. Always call any relevant tools *before* speaking.`,
-    },
-  ],
-};
-
 // Chips
 const INITIAL_SCREEN_CHIPS = [
-  { label: "🇫🇷 Paris packing list", message: "Paris packing list" },
+  { label: "Looking for a coffee shop", message: "The user is looking for a coffee shop" },
+  { label: "Looking for Amy Pavel.", message: "The user is looking for Amy Pavel, who is an assistant professor. User is currently at the entrance of the building." },
 ];
 
 const LIST_SCREEN_CHIPS = [
   {
-    label: "😊 Add more emojis",
-    message: "Add more emojis to list items",
+    label: " Confirm the goal is achieved",
+    message: "",
   },
   {
     label: "✨ Organise into categories",
@@ -177,7 +189,12 @@ const LIST_SCREEN_CHIPS = [
 ];
 
 function PlanningComponent() {
-  const { client, setConfig, connect, connected } = useLiveAPIContext();
+  const { client, setConfig, connect, disconnect, connected } = useLiveAPIContext();
+  const [responseText, setResponseText] = useState<string | null>("Loading...");
+  const { systemState, updateStateOnUserInput, setSystemState } = useSystemStateStore();
+
+  
+
 
   useEffect(() => {
     setConfig({
@@ -188,10 +205,16 @@ function PlanningComponent() {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
         },
       },
-      systemInstruction: systemInstructionObject,
+      systemInstruction: {
+        parts: [
+          {
+            text: systemState === 'planning' ? PLANNING_SYSTEM_INSTRUCTION : "you are an assistant who always repeat what the user says without any modification",
+          },
+        ],
+      },
       tools: toolObject,
     });
-  }, [setConfig]);
+  }, [setConfig, systemState]);
 
   const [isAwaitingFirstResponse, setIsAwaitingFirstResponse] = useState(false);
   const [initialMessage, setInitialMessage] = useState("");
@@ -243,13 +266,31 @@ function PlanningComponent() {
     );
   }, []);
 
+
+  // FIXME: change system prompt
+  // useEffect(() => {
+  //   console.log("systemState", systemState);
+
+  //   const handleConnection = async () => {
+  //     // disconnect and then connect again
+  //     if (connected) {
+  //       await disconnect();
+  //       console.log("Disconnected");
+  //       sleep(1000);
+  //       await connect();
+  //       console.log("Connected");
+  //     }
+  //   };
+  //   handleConnection();
+  // }, [systemState]);
+
   useEffect(() => {
-    const onToolCall = (toolCall: ToolCall) => {
+    const onToolCall = async (toolCall: ToolCall) => {
       const fCalls = toolCall.functionCalls;
       const functionResponses: ResponseObject[] = [];
 
       if (fCalls.length > 0) {
-        fCalls.forEach((fCall) => {
+        for (const fCall of fCalls) {
           let functionResponse = {
             id: fCall.id,
             name: fCall.name,
@@ -259,6 +300,37 @@ function PlanningComponent() {
           };
           switch (fCall.name) {
             case "look_at_lists": {
+              break;
+            }
+            case "visual_question_generation": {
+              const args = fCall.args as StringArgs;
+              const visualQuestion = await visualQuestionGeneration(args.context);
+              setResponseText(visualQuestion);
+              functionResponse = {
+                ...functionResponse,
+                response: {
+                  result: {
+                    string_value: `${fCall.name} OK.`,
+                  },
+                },
+              };
+              break;
+            }
+            case "add_to_context": {
+              const args = fCall.args as StringArgs;
+              const newList: ListProps = {
+                id: "1",
+                heading: args.context,
+                list_array: [],
+                onListUpdate: updateList,
+                onCheckboxChange: handleCheckboxChange,
+              };
+              setListsState((prevLists) => {
+                const updatedLists = [...prevLists, newList];
+                return updatedLists;
+              });
+              scrollToList(newList.id);
+              
               break;
             }
             case "edit_list": {
@@ -293,7 +365,7 @@ function PlanningComponent() {
           if (functionResponse) {
             functionResponses.push(functionResponse);
           }
-        });
+        };
 
         // Send tool responses back to the model
         const toolResponse: ToolResponse = {
@@ -355,10 +427,17 @@ function PlanningComponent() {
     return (
       <>
         {/* Hide while connecting to API */}
-        {!isAwaitingFirstResponse && (
+        {responseText && (
+        <div className="response-text">
+          <h3>CurrentContext:</h3>
+          <p>{responseText}</p>
+        </div>
+      )}
+        
+        { systemState == 'planning' && (
           <div className="initial-screen">
             <div className="spacer"></div>
-            <h1>Start a planning:</h1>
+            <h1>Start planning:</h1>
             <input
               type="text"
               value={initialMessage}
@@ -367,16 +446,16 @@ function PlanningComponent() {
               onChange={(e) => setInitialMessage(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  connectAndSend(`Start a list about: ${initialMessage}`);
+                  connectAndSend(`User context: ${initialMessage}`);
                 }
               }}
             />
             <div className="spacer"></div>
             <Chips
-              title={"How about:"}
+              title={"Example:"}
               chips={INITIAL_SCREEN_CHIPS}
               onChipClick={(message) => {
-                connectAndSend(`Start a list about: ${message}`);
+                connectAndSend(`User context: ${message}`);
               }}
             />
             <div className="spacer"></div>
@@ -390,6 +469,12 @@ function PlanningComponent() {
   const renderListScreen = () => {
     return (
       <>
+      {responseText && (
+        <div className="response-text">
+          <h3>Generated Visual Question:</h3>
+          <p>{responseText}</p>
+        </div>
+      )}
         <div className="list-screen">
           {listsState.map((listData) => (
             <List

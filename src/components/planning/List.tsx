@@ -128,23 +128,6 @@ const ListComponent = ({
         <div className={`heading-container ${glowHeader ? "glow" : ""}`}>
           <h1>{heading}</h1>
         </div>
-        <div className={`list-container ${glowListContainer ? "glow" : ""}`}>
-          <SortableContext
-            items={list.map((_, i) => i.toString())}
-            strategy={verticalListSortingStrategy}
-          >
-            {list.map((item, index) => (
-              <ListItem
-                key={index}
-                item={item}
-                index={index}
-                id={index.toString()}
-                onCheckboxChange={handleCheckboxClick}
-                isGlowing={glowList[index] || false}
-              />
-            ))}
-          </SortableContext>
-        </div>
       </div>
     </DndContext>
   );
